@@ -53,6 +53,7 @@ function check {
 }
 
 ##########################################################################################################################
+# Provision a new customer
 
 function create_tenant {
 	if [ $# -ne 1 ]
@@ -76,7 +77,12 @@ function create_adminuser_tenant {
         exit
         fi
 	#TODO Create admin user for each new tenant and store credentials in database
-		
+	USERNAME=$(echo "$1")
+	TENANT_NAME=$(echo "$1")
+	EMAIL=$(echo "$1")
+	create_user $USERNAME $TENANT_NAME $EMAIL
+	check;		
+	echo ""
 }
 
 function get_tenant_id {
@@ -106,6 +112,8 @@ function create_user {
 	keystone user-list --tenant_id=$2	
 }
 
+
+
 # Nova Functions
 
 function create_key {
@@ -119,6 +127,7 @@ function create_key {
 	KEY_NAME=$(echo "$1")	
 	#TODO Source tenant credentials
 	nova keypair-add $KEYNAME > keys/$KEYNAME."pem"
+	chmod 600 keys/$KEYNAME."pem"
 	#TODO Move Keys to Safe location at creation time
 	check;	
 }
@@ -131,20 +140,39 @@ function create_security_group {
                 echo "Syntax: $0 create_security_group <Name>"
         exit
         fi
-        SEC_GROUP=$(echo "$1")
+        SEC_GROUP_NAME=$(echo "$1")
 	DESCRIPTION=$(echo "$2")
-        nova secgroup-create $SEC_GROUP "$DESCRIPTION"
+        nova secgroup-create $SEC_GROUP_NAME "$DESCRIPTION"
         check;
-	echo "Printing " . $SEC_GROUP . " security rules"
-	nova secgroup-list-rules $SEC_GROUP
+	echo "Printing " . $SEC_GROUP_NAME . " security rules"
+	nova secgroup-list-rules $SEC_GROUP_NAME
 }
+
+function add_default_security_group_rules {
+	if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 create_security_group <Name>"
+        exit
+        fi
+        SEC_GROUP_NAME=$(echo "$1")
+	nova secgroup-add-rule $SEC_GROUP_NAME tcp 22 22 0.0.0.0/0
+	nova secgroup-add-rule $SEC_GROUP_NAME tcp 80 80 0.0.0.0/0
+	nova secgroup-add-rule $SEC_GROUP_NAME tcp 8080 8080 0.0.0.0/0
+	nova secgroup-add-rule $SEC_GROUP_NAME tcp 443 443 0.0.0.0/0
+	nova secgroup-add-rule $SEC_GROUP_NAME icmp -1 -1 0.0.0.0/0
+}
+
 
 ############
 
 init;
-#create_tenant "yahoo";
-#TENANT_ID=`get_tenant_id "yahoo"`;
+TENANT_NAME="facebook"
+USERNAME="markz"
+EMAIL="zuckenberg@facebook.com"
+create_tenant ;
+TENANT_ID=`get_tenant_id $TENANT_NAME`;
 #sleep 10
-#create_user "joker" $TENANT_ID "joker@gotham.gov";
-#create_key "yahoo";
-create_security_group "voice" "Allow SIP and RTP traffic"
+create_user $USERNAME $TENANT_ID $EMAIL;
+create_key $TENANT_NAME;
+create_security_group $TENANT_NAME "Allow SIP and RTP traffic"
