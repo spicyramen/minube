@@ -2,7 +2,7 @@
 # Script name: Create Tenant and VM instance 
 # By: Gonzalo Gasca Meza, Cloudtree.io
 # Date: January, 2015
-# Command Line: init.sh
+# Command Line: openstack_cli.sh
 # Purpose: Serve as instance provisioning passing parameters to openstack functions
 #
 #
@@ -14,10 +14,12 @@ trap "rm .f 2> /dev/null; exit" 0 1 3
 VERSION=0.1
 FILE="localrc"
 
-function init {
+##########################################################################################################################
+# * Source Credentials *
+function read_configuration {
 if [ -f $FILE ]; then
 	source $FILE
-	echo -e "Processing credentials..."
+	echo -e "Processing credentials...from credentials file"
 else
 	echo "No $FILE exists, please provide valid input"
 	exit 1
@@ -38,18 +40,21 @@ function get_field() {
 }
 
 function check {
-         ERROR_CODE=$(echo "$?")
-     if [ $ERROR_CODE -ne 0 ]; then
+    ERROR_CODE=$(echo "$?")
+    if [ $ERROR_CODE -ne 0 ]; then
          echo "Error ($ERROR_CODE) occurred"
          #      alarm $ERROR_CODE
-         if [ $ERROR_CODE -eq 6 ]; then
+        if [ $ERROR_CODE -eq 6 ]; then
              echo "Error ($ERROR_CODE) Unable to resolve host"
-         fi
-         if [ $ERROR_CODE -eq 7 ]; then
+        fi
+        if [ $ERROR_CODE -eq 7 ]; then
              echo "Error ($ERROR_CODE) Unable to connect to host"
-         fi
-         return 1
-     fi
+        fi
+        if [ $ERROR_CODE -eq 409 ]; then
+             echo "Error ($ERROR_CODE) Duplicate entry"
+        fi
+        return 1
+    fi
 }
 
 ##########################################################################################################################
@@ -62,27 +67,34 @@ function create_tenant {
     		echo "Syntax: $0 create_tenant <Tenant_name>"
    	exit
 	fi
+    echo "Creating Tenant..."
 	TENANT_NAME=$(echo "$1")
 	keystone tenant-list
 	keystone tenant-create --name=$TENANT_NAME
 	check;
-	create_adminuser_tenant $TENANT_NAME		
+    # Associates admin user by default to new tenant so we can manage it
+	DEFAULT_USERNAME="admin"
+	associate_user_to_tenant $DEFAULT_USERNAME $TENANT_NAME		
 }
 
-function create_adminuser_tenant {
-	if [ $# -ne 1 ]
+function associate_user_to_tenant {
+	if [ $# -ne 2 ]
         then
                 echo "Error in $0 - Invalid Argument Count"
-                echo "Syntax: $0 create_tenant <Tenant_name>"
+                echo "Syntax: $0 associate_user_to_tenant <username> <tenant_name>"
         exit
-        fi
-	#TODO Create admin user for each new tenant and store credentials in database
+    fi
+
 	USERNAME=$(echo "$1")
-	TENANT_NAME=$(echo "$1")
-	EMAIL=$(echo "$1")
-	create_user $USERNAME $TENANT_NAME $EMAIL
+	TENANT_NAME=$(echo "$2")
+    # Get Tenant ID
+	TENANT_ID=`get_tenant_id $2`
+    # Get Role ID for admin user
+	ROLE_ID=`keystone role-list | grep $USERNAME | get_field 1`
+	keystone user-role-add --user=$USERNAME --role=$ROLE_ID --tenant-id=$TENANT_ID
+	create_user $TENANT_NAME $TENANT_ID
+	keystone user-role-add --user=$TENANT_NAME --role=$ROLE_ID --tenant-id=$TENANT_ID 
 	check;		
-	echo ""
 }
 
 function get_tenant_id {
@@ -99,80 +111,131 @@ function get_tenant_id {
 }
 
 function create_user {
-	# Creates user create_user "batman" "05bd03f7e39b403eb523f3c1a3fe4dbb" "batman@gotham.gov"
+        ENABLE_USER=true
+        DEFAULT_PASSWORD="M1Nub3"
+	   # Creates user create_user "batman" "05bd03f7e39b403eb523f3c1a3fe4dbb" "batman@gotham.gov"
         if [ $# -gt 3 ]
         then
                 echo "Error in $0 - Invalid Argument Count"
                 echo "Syntax: $0 create_user username tenant_id email"
         exit
         fi
-	keystone user-create --name=$1 \
-			--tenant_id=$2 \
-                     --email=$3	
-	keystone user-list --tenant_id=$2	
+	
+        if [ $# -eq 2 ]
+        then
+                keystone user-create --name=$1 --tenant_id=$2 --pass $DEFAULT_PASSWORD --enabled $ENABLE_USER
+                keystone user-list --tenant_id=$2
+        elif [ $# -eq 3 ]
+        then
+                keystone user-create --name=$1 --tenant_id=$2 --email=$3 --pass $DEFAULT_PASSWORD --enabled $ENABLE_USER
+                keystone user-list --tenant_id=$2
+        else
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 create_user <name> <tenantid> <email>"        
+                exit
+        fi
+	
 }
 
+# *** Nova Functions ***
 
-
-# Nova Functions
-
-function create_key {
-        # Creates private key for specific tenant
-	if [ $# -ne 1 ]
+# Creates private key for specific tenant  
+function create_private_key {
+    if [ $# -ne 2 ]
         then
                 echo "Error in $0 - Invalid Argument Count"
-                echo "Syntax: $0 create_key <Tenant_name>"
+                echo "Syntax: $0 create_private_key <Tenant_name> <keyName>"
         exit
-        fi	
-	KEY_NAME=$(echo "$1")	
+    fi
+
+    TENANT_NAME=$(echo "$1")
+	KEY_NAME=$(echo "$2")	
 	#TODO Source tenant credentials
-	nova keypair-add $KEYNAME > keys/$KEYNAME."pem"
-	chmod 600 keys/$KEYNAME."pem"
-	#TODO Move Keys to Safe location at creation time
-	check;	
+	nova --os-tenant-name $TENANT_NAME keypair-add $KEY_NAME > keys/$KEY_NAME."pem"
+	chmod 600 keys/$KEY_NAME."pem"	
+	check;
+    #TODO Move Keys to Safe location at creation time    
 }
 
+# Will insert user record into DB
+function insert_user_record {
+	if [ $# -gt 3 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 insert_user_record "username" "password" "role" <Name>"
+        exit
+    fi
+}
+
+# Create security group 
 function create_security_group {
-        # Create security group
-	if [ $# -gt 2 ]
+	if [ $# -gt 3 ]
         then
                 echo "Error in $0 - Invalid Argument Count"
                 echo "Syntax: $0 create_security_group <Name>"
         exit
-        fi
-        SEC_GROUP_NAME=$(echo "$1")
-	DESCRIPTION=$(echo "$2")
-        nova secgroup-create $SEC_GROUP_NAME "$DESCRIPTION"
+    fi
+
+    TENANT_NAME=$(echo "$1")
+    SEC_GROUP_NAME=$(echo "$2")
+
+    if [ $# -eq 2 ]
+        then
+        nova --os-tenant-name $TENANT_NAME secgroup-create $SEC_GROUP_NAME
         check;
-	echo "Printing " . $SEC_GROUP_NAME . " security rules"
-	nova secgroup-list-rules $SEC_GROUP_NAME
+    elif [ $# -eq 3 ]
+        then
+        DESCRIPTION=$(echo "$3")
+        nova --os-tenant-name $TENANT_NAME secgroup-create $SEC_GROUP_NAME "$DESCRIPTION"
+        check;    
+    else
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 create_security_group <Tenant> <Name> <Description>"        
+                exit
+    fi
+
+    
+    echo "Printing " . $SEC_GROUP_NAME . " security rules:"
+	nova --os-tenant-name $TENANT_NAME secgroup-list-rules $SEC_GROUP_NAME
 }
 
 function add_default_security_group_rules {
-	if [ $# -ne 1 ]
+	if [ $# -ne 2 ]
         then
                 echo "Error in $0 - Invalid Argument Count"
                 echo "Syntax: $0 create_security_group <Name>"
         exit
-        fi
-        SEC_GROUP_NAME=$(echo "$1")
-	nova secgroup-add-rule $SEC_GROUP_NAME tcp 22 22 0.0.0.0/0
-	nova secgroup-add-rule $SEC_GROUP_NAME tcp 80 80 0.0.0.0/0
-	nova secgroup-add-rule $SEC_GROUP_NAME tcp 8080 8080 0.0.0.0/0
-	nova secgroup-add-rule $SEC_GROUP_NAME tcp 443 443 0.0.0.0/0
-	nova secgroup-add-rule $SEC_GROUP_NAME icmp -1 -1 0.0.0.0/0
+    fi
+    TENANT_NAME=$(echo "$1")
+    SEC_GROUP_NAME=$(echo "$2")    
+    nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 22 22 0.0.0.0/0
+    nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 80 80 0.0.0.0/0
+    nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 8080 8080 0.0.0.0/0
+    nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 443 443 0.0.0.0/0
+    nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME icmp -1 -1 0.0.0.0/0
 }
 
+# If something went terribly wrong roll back depending where things failed...
+function revert_changes {
+    if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 revert_changes <option>"
+        exit
+    fi
 
-############
+}
+####################################################################################
 
-init;
-TENANT_NAME="facebook"
-USERNAME="markz"
-EMAIL="zuckenberg@facebook.com"
-create_tenant ;
+read_configuration;
+TENANT_NAME="ebay"
+USER="megwhitman"
+EMAIL="meg@ebay.com"
+create_tenant $TENANT_NAME;
+
 TENANT_ID=`get_tenant_id $TENANT_NAME`;
-#sleep 10
-create_user $USERNAME $TENANT_ID $EMAIL;
-create_key $TENANT_NAME;
-create_security_group $TENANT_NAME "Allow SIP and RTP traffic"
+
+create_user $USER $TENANT_ID $EMAIL;
+create_private_key $TENANT_NAME $TENANT_NAME;
+create_security_group $TENANT_NAME $TENANT_NAME "Allow Web traffic default";
+add_default_security_group_rules $TENANT_NAME $TENANT_NAME;

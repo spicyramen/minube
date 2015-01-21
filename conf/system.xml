@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<system>
+<manufacturer>cloudtree.io</manufacturer>
+<model>nimbus</model>
+<softwareVersion>1.0</softwareVersion>
+<buildVersion>1.0</buildVersion>
+<username>admin</username>
+<password>M1Nub3</password>
+<tenant>admin</tenant>
+<default_userpassword>M1Nub3</default_userpassword>
+</system>
