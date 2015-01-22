@@ -28,7 +28,7 @@ fi
 
 ##########################################################################################################################
 
-function get_field() {
+function get_field {
     while read data; do
         if [ "$1" -lt 0 ]; then
             field="(\$(NF$1))"
@@ -213,6 +213,88 @@ function add_default_security_group_rules {
     nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 8080 8080 0.0.0.0/0
     nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME tcp 443 443 0.0.0.0/0
     nova --os-tenant-name $TENANT_NAME secgroup-add-rule $SEC_GROUP_NAME icmp -1 -1 0.0.0.0/0
+}
+
+function get_image_id {
+    # Returns image ID, do not validate if IMAGE is loaded or not
+    if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 get_image_id <Image name>"
+        exit
+    fi
+    #echo "Displaying Tenant list for customers..."
+    IMAGE_ID=`glance --os-image-api-version 2 image-list | grep $1 | get_field 1`
+    if [ -n $IMAGE_ID ]
+        then
+        #Verify is active
+        ACTIVE=`glance --os-image-api-version 2 image-list | grep $1 | get_field 6`        
+    fi
+    echo $IMAGE_ID
+    
+}
+
+function get_network_id {
+    # Returns network ID, do not validate if network is loaded or not
+    if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 get_network_id <Network name>"
+        exit
+    fi
+    #echo "Displaying Tenant list for customers..."
+    NETWORK_ID=`nova net-list | grep $1 | get_field 1`
+    if [ -n $NETWORK_ID ]
+        then
+        #Verify is active
+        echo $NETWORK_ID
+    fi
+    return
+    
+}
+function display_network_details {
+    # Returns image ID, do not validate if IMAGE is loaded or not
+    if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 display_network_details <Image name>"
+        exit
+    fi
+    NETWORK_NAME=$(echo "$1")
+    nova network-show $NETWORK_NAME
+
+}
+function create_virtual_machine {
+    
+    # Availability zone
+    # Instance Name
+    # Flavor
+    # Instance Count
+    # Instance boot source
+    #   Image name:  Default: cirros OS
+    #   Device size: Default: 20 GB
+    #   Device name: Default: vda
+    # Access Security
+    #   Private key
+    #   Security group
+    # Networking    
+    # Post creation
+    # Check status
+    if [ $# -ne 6 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 create_virtual_machine <flavor> <image> <nic> <security-group> <key-name> <name>"
+        exit
+    fi
+    FLAVOR=$(echo "$1")
+    IMAGE_NAME=$(echo "$2")    
+    NETWORK_NAME=$(echo "$3") 
+    SEC_GROUP_NAME=$(echo "$4") 
+    KEY_NAME=$(echo "$5") 
+    INSTANCE_NAME=$(echo "$6") 
+    nova boot --flavor $FLAVOR --image $IMAGE_NAME --nic $NETWORK_NAME --security-group $SEC_GROUP_NAME --key-name $KEY_NAME $INSTANCE_NAME
+    check;
+
 }
 
 # If something went terribly wrong roll back depending where things failed...
