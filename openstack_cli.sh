@@ -264,6 +264,18 @@ function display_network_details {
     nova network-show $NETWORK_NAME
 
 }
+
+function get_flavor {
+    # Returns image ID, do not validate if IMAGE is loaded or not
+    if [ $# -ne 1 ]
+        then
+                echo "Error in $0 - Invalid Argument Count"
+                echo "Syntax: $0 get_flavor <Image name>"
+        exit
+    fi
+    nova flavor-list | get_field 1
+}
+
 function create_virtual_machine {
     
     # Availability zone
@@ -307,17 +319,18 @@ function revert_changes {
     fi
 
 }
+
 ####################################################################################
 
 read_configuration;
-TENANT_NAME="ebay"
-USER="megwhitman"
-EMAIL="meg@ebay.com"
+TENANT_NAME="twilio"
+USER="admin"
+EMAIL="jeff@twilio.com"
 create_tenant $TENANT_NAME;
 
 TENANT_ID=`get_tenant_id $TENANT_NAME`;
 
-create_user $USER $TENANT_ID $EMAIL;
-create_private_key $TENANT_NAME $TENANT_NAME;
-create_security_group $TENANT_NAME $TENANT_NAME "Allow Web traffic default";
-add_default_security_group_rules $TENANT_NAME $TENANT_NAME;
+#create_user $USER $TENANT_ID $EMAIL;
+#create_private_key $TENANT_NAME $TENANT_NAME;
+#create_security_group $TENANT_NAME $TENANT_NAME "Allow Web traffic default";
+#add_default_security_group_rules $TENANT_NAME $TENANT_NAME;

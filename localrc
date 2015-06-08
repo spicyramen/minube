@@ -1,0 +1,8 @@
+export OS_USERNAME=admin
+export OS_PASSWORD=M1Nub3
+export OS_TENANT_NAME=admin
+export OS_AUTH_URL=http://127.0.0.1:5000/v2.0
+export NOVA_PASS=M1Nub3
+export NOVA_DBPASS=M1Nub3
+export RABBIT_PASS=M1Nub3
+export CONTROLLER=127.0.0.1
