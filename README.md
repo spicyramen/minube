@@ -1,10 +1,11 @@
 # minube
-minube
+This application allows to create Virtual machines using REST API using Python or shell scripts
+Use it as reference to create or automate Virtual machine creation
 
-# Twilio and Openstack demo
+## Instructions
+
+### Twilio and Openstack demo
 This application allows to create Virtual machines via SMS
-
-Replace Twilio Key and Twilio URL in Twilio Dashboard|From Phone
 
 Replace Controller IP Address| get_token credentials|Image name,key information
 ```
@@ -22,3 +23,6 @@ Replace your Openstack image information
 ```
 launch_instance function
 ```
+
+### Twilio
+Replace Twilio Key and Twilio URL in Twilio Dashboard|From Phone
